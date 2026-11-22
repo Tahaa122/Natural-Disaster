@@ -1,21 +1,64 @@
--- Fly Menu v2 (Black & White Glossy GUI)
--- F = ON/OFF Fly | WASD = gerak | Space = naik | Ctrl = turun
--- Tombol "-" = kecilin menu | Tombol X = tutup & matikan semua
--- Slider: atur Fly Speed dan Jump Power
+--[[
+	FLY HUB | PRO  (Black & White GUI)
+
+	Keybind:
+	  F          = Fly ON/OFF
+	  N          = Noclip ON/OFF
+	  J          = Infinite Jump ON/OFF
+	  RightShift = Tampilkan / sembunyikan menu
+
+	Fly: WASD = gerak | Space = naik | Ctrl = turun
+]]
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local VirtualUser = game:GetService("VirtualUser")
 
 local Player = Players.LocalPlayer
-local Flying = false
-local Speed = 60            -- kecepatan terbang (bisa diubah dari slider)
-local JumpPowerValue = 50   -- tinggi lompat (bisa diubah dari slider)
-local JumpChanged = false   -- jump baru diubah kalau slider disentuh
+
+-- ==================== STATE ====================
+local State = {
+	Flying = false,
+	Noclip = false,
+	InfJump = false,
+	AntiAFK = false,
+	FlySpeed = 60,
+	WalkSpeed = 16,
+	JumpPower = 50,
+	WalkChanged = false,
+	JumpChanged = false,
+}
 
 local BV, BG
 local Connections = {}
+local FlyToggle -- diisi nanti
+
+-- ==================== HELPER KARAKTER ====================
+local function getChar() return Player.Character end
+
+local function getRoot()
+	local c = getChar()
+	return c and c:FindFirstChild("HumanoidRootPart")
+end
+
+local function getHumanoid()
+	local c = getChar()
+	return c and c:FindFirstChildOfClass("Humanoid")
+end
+
+-- Simpan nilai asli game buat tombol Reset
+local DefaultWalk, DefaultJump = 16, 50
+do
+	local hum = getHumanoid()
+	if hum then
+		DefaultWalk = hum.WalkSpeed
+		DefaultJump = hum.JumpPower
+	end
+end
+State.WalkSpeed = DefaultWalk
+State.JumpPower = DefaultJump
 
 -- ==================== PARENT GUI ====================
 local guiParent
@@ -26,200 +69,367 @@ else
 	guiParent = Player:WaitForChild("PlayerGui")
 end
 
-local old = guiParent:FindFirstChild("FlyMenu")
+local old = guiParent:FindFirstChild("FlyHubPro")
 if old then old:Destroy() end
 
--- ==================== GUI ====================
-local FULL_SIZE = UDim2.new(0, 240, 0, 214)
-local MINI_SIZE = UDim2.new(0, 240, 0, 38)
+-- ==================== TEMA & UTILITAS UI ====================
+local C = {
+	Bg = Color3.fromRGB(16, 16, 16),
+	Panel = Color3.fromRGB(30, 30, 30),
+	Hover = Color3.fromRGB(46, 46, 46),
+	Off = Color3.fromRGB(65, 65, 65),
+	White = Color3.fromRGB(255, 255, 255),
+	Black = Color3.fromRGB(0, 0, 0),
+	Dim = Color3.fromRGB(160, 160, 160),
+}
+
+local function addCorner(obj, r)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, r)
+	c.Parent = obj
+	return c
+end
+
+local function addStroke(obj, transparency, thickness)
+	local s = Instance.new("UIStroke")
+	s.Color = C.White
+	s.Transparency = transparency or 0.7
+	s.Thickness = thickness or 1
+	s.Parent = obj
+	return s
+end
+
+local function tween(obj, props, t)
+	TweenService:Create(obj, TweenInfo.new(t or 0.18, Enum.EasingStyle.Quad), props):Play()
+end
+
+-- ==================== WINDOW ====================
+local FULL_SIZE = UDim2.new(0, 400, 0, 290)
+local MINI_SIZE = UDim2.new(0, 400, 0, 36)
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "FlyMenu"
+ScreenGui.Name = "FlyHubPro"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder = 999
 ScreenGui.Parent = guiParent
 
 local Main = Instance.new("Frame")
 Main.Name = "Main"
 Main.Size = FULL_SIZE
-Main.Position = UDim2.new(0, 20, 0.5, -107)
-Main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Main.Position = UDim2.new(0, 20, 0.5, -145)
+Main.BackgroundColor3 = C.Bg
 Main.BorderSizePixel = 0
 Main.ClipsDescendants = true
 Main.Parent = ScreenGui
-
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 12)
-MainCorner.Parent = Main
-
-local Stroke = Instance.new("UIStroke")
-Stroke.Color = Color3.fromRGB(255, 255, 255)
-Stroke.Thickness = 1.4
-Stroke.Transparency = 0.25
-Stroke.Parent = Main
+addCorner(Main, 12)
+addStroke(Main, 0.25, 1.4)
 
 local Gradient = Instance.new("UIGradient")
 Gradient.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 40, 40)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 8, 8)),
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(38, 38, 38)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 10, 10)),
 })
 Gradient.Rotation = 90
 Gradient.Parent = Main
 
--- Title bar (area buat drag)
+-- Title bar
 local TitleBar = Instance.new("Frame")
-TitleBar.Name = "TitleBar"
-TitleBar.Size = UDim2.new(1, 0, 0, 38)
+TitleBar.Size = UDim2.new(1, 0, 0, 36)
 TitleBar.BackgroundTransparency = 1
 TitleBar.Active = true
 TitleBar.Parent = Main
 
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -80, 1, 0)
-Title.Position = UDim2.new(0, 12, 0, 0)
+Title.Size = UDim2.new(1, -90, 1, 0)
+Title.Position = UDim2.new(0, 14, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "FLY MENU"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Text = "FLY HUB  |  PRO"
+Title.TextColor3 = C.White
 Title.Font = Enum.Font.GothamBold
-Title.TextSize = 18
+Title.TextSize = 16
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = TitleBar
 
 local MinBtn = Instance.new("TextButton")
 MinBtn.Size = UDim2.new(0, 28, 0, 28)
-MinBtn.Position = UDim2.new(1, -62, 0, 5)
+MinBtn.Position = UDim2.new(1, -64, 0, 4)
 MinBtn.BackgroundTransparency = 1
 MinBtn.Text = "-"
-MinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinBtn.TextColor3 = C.White
 MinBtn.Font = Enum.Font.GothamBold
 MinBtn.TextSize = 22
 MinBtn.Parent = TitleBar
 
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size = UDim2.new(0, 28, 0, 28)
-CloseBtn.Position = UDim2.new(1, -32, 0, 5)
+CloseBtn.Position = UDim2.new(1, -34, 0, 4)
 CloseBtn.BackgroundTransparency = 1
 CloseBtn.Text = "X"
-CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextColor3 = C.White
 CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.TextSize = 16
+CloseBtn.TextSize = 15
 CloseBtn.Parent = TitleBar
 
--- Isi menu (disembunyiin waktu minimize)
-local Content = Instance.new("Frame")
-Content.Name = "Content"
-Content.Size = UDim2.new(1, 0, 1, -38)
-Content.Position = UDim2.new(0, 0, 0, 38)
-Content.BackgroundTransparency = 1
-Content.Parent = Main
+local Divider = Instance.new("Frame")
+Divider.Size = UDim2.new(1, -24, 0, 1)
+Divider.Position = UDim2.new(0, 12, 0, 36)
+Divider.BackgroundColor3 = C.White
+Divider.BackgroundTransparency = 0.8
+Divider.BorderSizePixel = 0
+Divider.Parent = Main
 
-local Line = Instance.new("Frame")
-Line.Size = UDim2.new(0.85, 0, 0, 1)
-Line.Position = UDim2.new(0.075, 0, 0, 0)
-Line.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-Line.BackgroundTransparency = 0.7
-Line.BorderSizePixel = 0
-Line.Parent = Content
+-- Body (disembunyikan saat minimize)
+local Body = Instance.new("Frame")
+Body.Size = UDim2.new(1, 0, 1, -37)
+Body.Position = UDim2.new(0, 0, 0, 37)
+Body.BackgroundTransparency = 1
+Body.Parent = Main
 
-local ToggleBtn = Instance.new("TextButton")
-ToggleBtn.Name = "Toggle"
-ToggleBtn.Size = UDim2.new(0.8, 0, 0, 40)
-ToggleBtn.Position = UDim2.new(0.1, 0, 0, 12)
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-ToggleBtn.BorderSizePixel = 0
-ToggleBtn.AutoButtonColor = false
-ToggleBtn.Text = "FLY : OFF"
-ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleBtn.Font = Enum.Font.GothamBold
-ToggleBtn.TextSize = 16
-ToggleBtn.Parent = Content
+local Sidebar = Instance.new("Frame")
+Sidebar.Size = UDim2.new(0, 92, 1, -16)
+Sidebar.Position = UDim2.new(0, 10, 0, 8)
+Sidebar.BackgroundTransparency = 1
+Sidebar.Parent = Body
 
-local BtnCorner = Instance.new("UICorner")
-BtnCorner.CornerRadius = UDim.new(0, 8)
-BtnCorner.Parent = ToggleBtn
+local SideList = Instance.new("UIListLayout")
+SideList.Padding = UDim.new(0, 6)
+SideList.Parent = Sidebar
 
-local BtnStroke = Instance.new("UIStroke")
-BtnStroke.Color = Color3.fromRGB(255, 255, 255)
-BtnStroke.Thickness = 1.2
-BtnStroke.Transparency = 0.4
-BtnStroke.Parent = ToggleBtn
+local PageHolder = Instance.new("Frame")
+PageHolder.Size = UDim2.new(1, -118, 1, -12)
+PageHolder.Position = UDim2.new(0, 108, 0, 6)
+PageHolder.BackgroundTransparency = 1
+PageHolder.Parent = Body
 
-local Info = Instance.new("TextLabel")
-Info.Size = UDim2.new(1, 0, 0, 18)
-Info.Position = UDim2.new(0, 0, 1, -22)
-Info.BackgroundTransparency = 1
-Info.Text = "Tekan F juga bisa"
-Info.TextColor3 = Color3.fromRGB(170, 170, 170)
-Info.Font = Enum.Font.Gotham
-Info.TextSize = 12
-Info.Parent = Content
+-- ==================== TOAST / NOTIFIKASI ====================
+local lastToast
+local function notify(text)
+	if lastToast then lastToast:Destroy() end
+	local T = Instance.new("TextLabel")
+	T.Size = UDim2.new(0, 240, 0, 32)
+	T.AnchorPoint = Vector2.new(0.5, 1)
+	T.Position = UDim2.new(0.5, 0, 1, -24)
+	T.BackgroundColor3 = C.Bg
+	T.BackgroundTransparency = 0.1
+	T.Text = text
+	T.TextColor3 = C.White
+	T.Font = Enum.Font.GothamMedium
+	T.TextSize = 13
+	T.Parent = ScreenGui
+	addCorner(T, 8)
+	addStroke(T, 0.5, 1)
+	lastToast = T
+	task.delay(1.8, function()
+		if T and T.Parent then T:Destroy() end
+	end)
+end
 
--- ==================== SLIDER ====================
-local function makeSlider(labelText, yPos, minV, maxV, defaultV, onChange)
+-- ==================== TAB & PAGE ====================
+local Tabs = {}
+local CurrentTab
+
+local function selectTab(name)
+	CurrentTab = name
+	for n, t in pairs(Tabs) do
+		local active = (n == name)
+		t.Page.Visible = active
+		tween(t.Btn, {
+			BackgroundColor3 = active and C.White or C.Panel,
+			TextColor3 = active and C.Black or C.White,
+		})
+	end
+end
+
+local function createTab(name)
+	local Btn = Instance.new("TextButton")
+	Btn.Size = UDim2.new(1, 0, 0, 32)
+	Btn.BackgroundColor3 = C.Panel
+	Btn.AutoButtonColor = false
+	Btn.Text = name
+	Btn.TextColor3 = C.White
+	Btn.Font = Enum.Font.GothamBold
+	Btn.TextSize = 13
+	Btn.Parent = Sidebar
+	addCorner(Btn, 8)
+
+	local Page = Instance.new("ScrollingFrame")
+	Page.Size = UDim2.new(1, 0, 1, 0)
+	Page.BackgroundTransparency = 1
+	Page.BorderSizePixel = 0
+	Page.ScrollBarThickness = 3
+	Page.ScrollBarImageColor3 = C.White
+	Page.CanvasSize = UDim2.new(0, 0, 0, 0)
+	Page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	Page.Visible = false
+	Page.Parent = PageHolder
+
+	local List = Instance.new("UIListLayout")
+	List.Padding = UDim.new(0, 8)
+	List.Parent = Page
+
+	local Pad = Instance.new("UIPadding")
+	Pad.PaddingTop = UDim.new(0, 2)
+	Pad.PaddingBottom = UDim.new(0, 4)
+	Pad.PaddingRight = UDim.new(0, 6)
+	Pad.Parent = Page
+
+	Tabs[name] = {Btn = Btn, Page = Page}
+	Btn.MouseButton1Click:Connect(function() selectTab(name) end)
+	return Page
+end
+
+-- ==================== KOMPONEN UI ====================
+local function newRow(parent, height)
+	local Row = Instance.new("Frame")
+	Row.Size = UDim2.new(1, 0, 0, height)
+	Row.BackgroundColor3 = C.Panel
+	Row.BorderSizePixel = 0
+	Row.Parent = parent
+	addCorner(Row, 8)
+	return Row
+end
+
+local function createToggle(parent, text, default, callback)
+	local Row = newRow(parent, 38)
+
 	local Label = Instance.new("TextLabel")
-	Label.Size = UDim2.new(0.8, 0, 0, 18)
-	Label.Position = UDim2.new(0.1, 0, 0, yPos)
+	Label.Size = UDim2.new(1, -70, 1, 0)
+	Label.Position = UDim2.new(0, 12, 0, 0)
 	Label.BackgroundTransparency = 1
-	Label.Text = labelText .. ": " .. defaultV
-	Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+	Label.Text = text
+	Label.TextColor3 = C.White
 	Label.Font = Enum.Font.GothamMedium
 	Label.TextSize = 13
 	Label.TextXAlignment = Enum.TextXAlignment.Left
-	Label.Parent = Content
+	Label.Parent = Row
+
+	local Switch = Instance.new("Frame")
+	Switch.Size = UDim2.new(0, 40, 0, 20)
+	Switch.Position = UDim2.new(1, -52, 0.5, -10)
+	Switch.BackgroundColor3 = C.Off
+	Switch.BorderSizePixel = 0
+	Switch.Parent = Row
+	addCorner(Switch, 10)
+
+	local Knob = Instance.new("Frame")
+	Knob.Size = UDim2.new(0, 16, 0, 16)
+	Knob.Position = UDim2.new(0, 2, 0.5, -8)
+	Knob.BackgroundColor3 = C.White
+	Knob.BorderSizePixel = 0
+	Knob.Parent = Switch
+	addCorner(Knob, 8)
+
+	local Click = Instance.new("TextButton")
+	Click.Size = UDim2.new(1, 0, 1, 0)
+	Click.BackgroundTransparency = 1
+	Click.Text = ""
+	Click.Parent = Row
+
+	local state = false
+	local obj = {}
+
+	function obj.Set(v, silent)
+		state = v
+		tween(Switch, {BackgroundColor3 = v and C.White or C.Off})
+		tween(Knob, {
+			Position = v and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8),
+			BackgroundColor3 = v and C.Black or C.White,
+		})
+		if not silent then callback(v) end
+	end
+
+	function obj.Get() return state end
+
+	Click.MouseButton1Click:Connect(function() obj.Set(not state) end)
+	obj.Set(default, true)
+	return obj
+end
+
+local function createSlider(parent, text, minV, maxV, default, callback)
+	local Row = newRow(parent, 58)
+
+	local Name = Instance.new("TextLabel")
+	Name.Size = UDim2.new(0.6, 0, 0, 20)
+	Name.Position = UDim2.new(0, 12, 0, 6)
+	Name.BackgroundTransparency = 1
+	Name.Text = text
+	Name.TextColor3 = C.White
+	Name.Font = Enum.Font.GothamMedium
+	Name.TextSize = 13
+	Name.TextXAlignment = Enum.TextXAlignment.Left
+	Name.Parent = Row
+
+	local ValueLabel = Instance.new("TextLabel")
+	ValueLabel.Size = UDim2.new(0.4, -12, 0, 20)
+	ValueLabel.Position = UDim2.new(0.6, 0, 0, 6)
+	ValueLabel.BackgroundTransparency = 1
+	ValueLabel.TextColor3 = C.Dim
+	ValueLabel.Font = Enum.Font.GothamBold
+	ValueLabel.TextSize = 13
+	ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
+	ValueLabel.Parent = Row
 
 	local Track = Instance.new("Frame")
-	Track.Size = UDim2.new(0.8, 0, 0, 22)
-	Track.Position = UDim2.new(0.1, 0, 0, yPos + 20)
+	Track.Size = UDim2.new(1, -24, 0, 22)
+	Track.Position = UDim2.new(0, 12, 0, 30)
 	Track.BackgroundTransparency = 1
 	Track.Active = true
-	Track.Parent = Content
+	Track.Parent = Row
 
 	local Bar = Instance.new("Frame")
 	Bar.Size = UDim2.new(1, 0, 0, 6)
 	Bar.Position = UDim2.new(0, 0, 0.5, -3)
-	Bar.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+	Bar.BackgroundColor3 = C.Off
 	Bar.BorderSizePixel = 0
 	Bar.Parent = Track
-	Instance.new("UICorner", Bar).CornerRadius = UDim.new(1, 0)
+	addCorner(Bar, 3)
 
 	local Fill = Instance.new("Frame")
-	Fill.Size = UDim2.new((defaultV - minV) / (maxV - minV), 0, 1, 0)
-	Fill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	Fill.Size = UDim2.new(0, 0, 1, 0)
+	Fill.BackgroundColor3 = C.White
 	Fill.BorderSizePixel = 0
 	Fill.Parent = Bar
-	Instance.new("UICorner", Fill).CornerRadius = UDim.new(1, 0)
+	addCorner(Fill, 3)
 
 	local Knob = Instance.new("Frame")
 	Knob.Size = UDim2.new(0, 14, 0, 14)
 	Knob.AnchorPoint = Vector2.new(0.5, 0.5)
 	Knob.Position = UDim2.new(1, 0, 0.5, 0)
-	Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	Knob.BackgroundColor3 = C.White
 	Knob.BorderSizePixel = 0
 	Knob.Parent = Fill
-	Instance.new("UICorner", Knob).CornerRadius = UDim.new(1, 0)
+	addCorner(Knob, 7)
+
+	local obj = {}
+
+	function obj.Set(v, silent)
+		v = math.clamp(math.floor(v + 0.5), minV, maxV)
+		local rel = (v - minV) / (maxV - minV)
+		Fill.Size = UDim2.new(rel, 0, 1, 0)
+		ValueLabel.Text = tostring(v)
+		if not silent then callback(v) end
+	end
 
 	local sliding = false
 
-	local function setFromX(x)
+	local function fromX(x)
 		local rel = math.clamp((x - Track.AbsolutePosition.X) / Track.AbsoluteSize.X, 0, 1)
-		local value = math.floor(minV + (maxV - minV) * rel + 0.5)
-		Fill.Size = UDim2.new(rel, 0, 1, 0)
-		Label.Text = labelText .. ": " .. value
-		onChange(value)
+		obj.Set(minV + (maxV - minV) * rel)
 	end
 
 	Track.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1
 			or input.UserInputType == Enum.UserInputType.Touch then
 			sliding = true
-			setFromX(input.Position.X)
+			fromX(input.Position.X)
 		end
 	end)
 
 	table.insert(Connections, UIS.InputChanged:Connect(function(input)
 		if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement
 			or input.UserInputType == Enum.UserInputType.Touch) then
-			setFromX(input.Position.X)
+			fromX(input.Position.X)
 		end
 	end))
 
@@ -229,9 +439,256 @@ local function makeSlider(labelText, yPos, minV, maxV, defaultV, onChange)
 			sliding = false
 		end
 	end))
+
+	obj.Set(default, true)
+	return obj
 end
 
--- ==================== DRAG GUI (lewat title bar) ====================
+local function createButton(parent, text, callback)
+	local Btn = Instance.new("TextButton")
+	Btn.Size = UDim2.new(1, 0, 0, 36)
+	Btn.BackgroundColor3 = C.Panel
+	Btn.AutoButtonColor = false
+	Btn.Text = text
+	Btn.TextColor3 = C.White
+	Btn.Font = Enum.Font.GothamBold
+	Btn.TextSize = 13
+	Btn.Parent = parent
+	addCorner(Btn, 8)
+	addStroke(Btn, 0.6, 1)
+
+	Btn.MouseEnter:Connect(function() tween(Btn, {BackgroundColor3 = C.Hover}) end)
+	Btn.MouseLeave:Connect(function() tween(Btn, {BackgroundColor3 = C.Panel}) end)
+	Btn.MouseButton1Click:Connect(callback)
+	return Btn
+end
+
+local function createInfo(parent, text, height)
+	local Row = newRow(parent, height)
+	local L = Instance.new("TextLabel")
+	L.Size = UDim2.new(1, -24, 1, -12)
+	L.Position = UDim2.new(0, 12, 0, 6)
+	L.BackgroundTransparency = 1
+	L.Text = text
+	L.TextColor3 = C.Dim
+	L.Font = Enum.Font.Gotham
+	L.TextSize = 12
+	L.TextWrapped = true
+	L.TextXAlignment = Enum.TextXAlignment.Left
+	L.TextYAlignment = Enum.TextYAlignment.Top
+	L.Parent = Row
+	return L
+end
+
+-- ==================== FLY LOGIC ====================
+local function stopFly()
+	State.Flying = false
+	if BV then BV:Destroy() BV = nil end
+	if BG then BG:Destroy() BG = nil end
+	local hum = getHumanoid()
+	if hum then hum.PlatformStand = false end
+	if FlyToggle then FlyToggle.Set(false, true) end
+end
+
+local function startFly()
+	local root = getRoot()
+	local hum = getHumanoid()
+	if not root or not hum then return false end
+
+	if BV then BV:Destroy() end
+	if BG then BG:Destroy() end
+
+	BV = Instance.new("BodyVelocity")
+	BV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+	BV.Velocity = Vector3.zero
+	BV.Parent = root
+
+	BG = Instance.new("BodyGyro")
+	BG.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+	BG.P = 10000
+	BG.CFrame = root.CFrame
+	BG.Parent = root
+
+	hum.PlatformStand = true
+	State.Flying = true
+	return true
+end
+
+-- ==================== PAGES ====================
+local MainPage = createTab("Main")
+local PlayerPage = createTab("Player")
+local MiscPage = createTab("Misc")
+
+-- ---- Main ----
+FlyToggle = createToggle(MainPage, "Fly  [F]", false, function(v)
+	if v then
+		if not startFly() then
+			FlyToggle.Set(false, true)
+			return
+		end
+		notify("Fly: ON")
+	else
+		stopFly()
+		notify("Fly: OFF")
+	end
+end)
+
+local FlySlider = createSlider(MainPage, "Fly Speed", 10, 300, State.FlySpeed, function(v)
+	State.FlySpeed = v
+end)
+
+local NoclipToggle = createToggle(MainPage, "Noclip  [N]", false, function(v)
+	State.Noclip = v
+	notify("Noclip: " .. (v and "ON" or "OFF"))
+end)
+
+local InfJumpToggle = createToggle(MainPage, "Infinite Jump  [J]", false, function(v)
+	State.InfJump = v
+	notify("Infinite Jump: " .. (v and "ON" or "OFF"))
+end)
+
+-- ---- Player ----
+local WalkSlider = createSlider(PlayerPage, "Walk Speed", 8, 200,
+	math.clamp(DefaultWalk, 8, 200), function(v)
+		State.WalkSpeed = v
+		State.WalkChanged = true
+	end)
+
+local JumpSlider = createSlider(PlayerPage, "Jump Power", 20, 250,
+	math.clamp(DefaultJump, 20, 250), function(v)
+		State.JumpPower = v
+		State.JumpChanged = true
+	end)
+
+createButton(PlayerPage, "Reset Walk & Jump", function()
+	State.WalkChanged = false
+	State.JumpChanged = false
+	State.WalkSpeed = DefaultWalk
+	State.JumpPower = DefaultJump
+	WalkSlider.Set(math.clamp(DefaultWalk, 8, 200), true)
+	JumpSlider.Set(math.clamp(DefaultJump, 20, 250), true)
+	local hum = getHumanoid()
+	if hum then
+		hum.WalkSpeed = DefaultWalk
+		hum.JumpPower = DefaultJump
+	end
+	notify("Walk & Jump di-reset")
+end)
+
+-- ---- Misc ----
+local AFKToggle = createToggle(MiscPage, "Anti AFK", false, function(v)
+	State.AntiAFK = v
+	notify("Anti AFK: " .. (v and "ON" or "OFF"))
+end)
+
+createInfo(MiscPage,
+	"Keybind:\nF = Fly\nN = Noclip\nJ = Infinite Jump\nRightShift = Tampil/sembunyi menu\n\nFly: WASD + Space (naik) + Ctrl (turun)",
+	118)
+
+local function unload()
+	stopFly()
+	for _, c in ipairs(Connections) do
+		c:Disconnect()
+	end
+	ScreenGui:Destroy()
+end
+
+createButton(MiscPage, "Unload Script", unload)
+
+selectTab("Main")
+
+-- ==================== LOOP UTAMA ====================
+-- Fly + enforce walk/jump
+table.insert(Connections, RunService.Heartbeat:Connect(function()
+	local hum = getHumanoid()
+	if hum then
+		if State.WalkChanged and hum.WalkSpeed ~= State.WalkSpeed then
+			hum.WalkSpeed = State.WalkSpeed
+		end
+		if State.JumpChanged then
+			if not hum.UseJumpPower then hum.UseJumpPower = true end
+			if hum.JumpPower ~= State.JumpPower then
+				hum.JumpPower = State.JumpPower
+			end
+		end
+	end
+
+	if not State.Flying then return end
+
+	local root = getRoot()
+	if not root or not BV or not BG then
+		stopFly()
+		return
+	end
+
+	if BV.Parent ~= root then BV.Parent = root end
+	if BG.Parent ~= root then BG.Parent = root end
+
+	local cam = workspace.CurrentCamera
+	local move = Vector3.zero
+
+	if UIS:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
+	if UIS:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
+	if UIS:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
+	if UIS:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
+	if UIS:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0, 1, 0) end
+	if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0, 1, 0) end
+
+	if move.Magnitude > 0 then
+		BV.Velocity = move.Unit * State.FlySpeed
+	else
+		BV.Velocity = Vector3.zero
+	end
+
+	BG.CFrame = cam.CFrame
+end))
+
+-- Noclip
+table.insert(Connections, RunService.Stepped:Connect(function()
+	if not State.Noclip then return end
+	local char = getChar()
+	if not char then return end
+	for _, part in ipairs(char:GetDescendants()) do
+		if part:IsA("BasePart") and part.CanCollide then
+			part.CanCollide = false
+		end
+	end
+end))
+
+-- Infinite Jump
+table.insert(Connections, UIS.JumpRequest:Connect(function()
+	if not State.InfJump then return end
+	local hum = getHumanoid()
+	if hum then
+		hum:ChangeState(Enum.HumanoidStateType.Jumping)
+	end
+end))
+
+-- Anti AFK
+table.insert(Connections, Player.Idled:Connect(function()
+	if not State.AntiAFK then return end
+	pcall(function()
+		VirtualUser:CaptureController()
+		VirtualUser:ClickButton2(Vector2.new())
+	end)
+end))
+
+-- ==================== KEYBIND ====================
+table.insert(Connections, UIS.InputBegan:Connect(function(input, gpe)
+	if gpe then return end
+	local k = input.KeyCode
+	if k == Enum.KeyCode.F then
+		FlyToggle.Set(not FlyToggle.Get())
+	elseif k == Enum.KeyCode.N then
+		NoclipToggle.Set(not NoclipToggle.Get())
+	elseif k == Enum.KeyCode.J then
+		InfJumpToggle.Set(not InfJumpToggle.Get())
+	elseif k == Enum.KeyCode.RightShift then
+		ScreenGui.Enabled = not ScreenGui.Enabled
+	end
+end))
+
+-- ==================== DRAG ====================
 do
 	local dragging, dragStart, startPos
 
@@ -263,188 +720,35 @@ do
 	end))
 end
 
--- ==================== HELPER KARAKTER ====================
-local function getRoot()
-	local char = Player.Character
-	return char and char:FindFirstChild("HumanoidRootPart")
-end
-
-local function getHumanoid()
-	local char = Player.Character
-	return char and char:FindFirstChildOfClass("Humanoid")
-end
-
-local function applyJump()
-	if not JumpChanged then return end
-	local hum = getHumanoid()
-	if hum then
-		hum.UseJumpPower = true
-		hum.JumpPower = JumpPowerValue
-	end
-end
-
--- Slider (Fly Speed & Jump Power)
-makeSlider("Fly Speed", 62, 10, 300, Speed, function(v)
-	Speed = v
-end)
-
-makeSlider("Jump Power", 106, 20, 250, JumpPowerValue, function(v)
-	JumpPowerValue = v
-	JumpChanged = true
-	applyJump()
-end)
-
--- ==================== FLY LOGIC ====================
-local function updateButton()
-	if Flying then
-		ToggleBtn.Text = "FLY : ON"
-		TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {
-			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-			TextColor3 = Color3.fromRGB(0, 0, 0),
-		}):Play()
-	else
-		ToggleBtn.Text = "FLY : OFF"
-		TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {
-			BackgroundColor3 = Color3.fromRGB(25, 25, 25),
-			TextColor3 = Color3.fromRGB(255, 255, 255),
-		}):Play()
-	end
-end
-
-local function stopFly()
-	Flying = false
-	if BV then BV:Destroy() BV = nil end
-	if BG then BG:Destroy() BG = nil end
-	local hum = getHumanoid()
-	if hum then hum.PlatformStand = false end
-	updateButton()
-end
-
-local function startFly()
-	local root = getRoot()
-	local hum = getHumanoid()
-	if not root or not hum then return end
-
-	if BV then BV:Destroy() end
-	if BG then BG:Destroy() end
-
-	BV = Instance.new("BodyVelocity")
-	BV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-	BV.Velocity = Vector3.zero
-	BV.Parent = root
-
-	BG = Instance.new("BodyGyro")
-	BG.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-	BG.P = 10000
-	BG.CFrame = root.CFrame
-	BG.Parent = root
-
-	hum.PlatformStand = true
-	Flying = true
-	updateButton()
-end
-
-local function toggleFly()
-	if Flying then
-		stopFly()
-	else
-		startFly()
-	end
-end
-
-table.insert(Connections, RunService.Heartbeat:Connect(function()
-	if not Flying then return end
-
-	local root = getRoot()
-	if not root or not BV or not BG then
-		stopFly()
-		return
-	end
-
-	if BV.Parent ~= root then BV.Parent = root end
-	if BG.Parent ~= root then BG.Parent = root end
-
-	local cam = workspace.CurrentCamera
-	local move = Vector3.zero
-
-	if UIS:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
-	if UIS:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
-	if UIS:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
-	if UIS:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
-	if UIS:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0, 1, 0) end
-	if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0, 1, 0) end
-
-	if move.Magnitude > 0 then
-		BV.Velocity = move.Unit * Speed
-	else
-		BV.Velocity = Vector3.zero
-	end
-
-	BG.CFrame = cam.CFrame
-end))
-
--- ==================== MINIMIZE ====================
+-- ==================== MINIMIZE & CLOSE ====================
 local Minimized = false
 
-local function setMinimized(state)
-	Minimized = state
+MinBtn.MouseButton1Click:Connect(function()
+	Minimized = not Minimized
 	if Minimized then
 		MinBtn.Text = "+"
-		Content.Visible = false
-		TweenService:Create(Main, TweenInfo.new(0.2), {Size = MINI_SIZE}):Play()
+		Body.Visible = false
+		Divider.Visible = false
+		tween(Main, {Size = MINI_SIZE}, 0.2)
 	else
 		MinBtn.Text = "-"
-		TweenService:Create(Main, TweenInfo.new(0.2), {Size = FULL_SIZE}):Play()
-		task.delay(0.15, function()
-			if not Minimized then Content.Visible = true end
+		Divider.Visible = true
+		tween(Main, {Size = FULL_SIZE}, 0.2)
+		task.delay(0.12, function()
+			if not Minimized then Body.Visible = true end
 		end)
 	end
-end
-
-MinBtn.MouseButton1Click:Connect(function()
-	setMinimized(not Minimized)
 end)
 
--- ==================== TOMBOL & KEYBIND ====================
-ToggleBtn.MouseButton1Click:Connect(toggleFly)
+CloseBtn.MouseButton1Click:Connect(unload)
 
-ToggleBtn.MouseEnter:Connect(function()
-	if not Flying then
-		TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {
-			BackgroundColor3 = Color3.fromRGB(45, 45, 45),
-		}):Play()
-	end
-end)
-
-ToggleBtn.MouseLeave:Connect(function()
-	if not Flying then
-		TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {
-			BackgroundColor3 = Color3.fromRGB(25, 25, 25),
-		}):Play()
-	end
-end)
-
-table.insert(Connections, UIS.InputBegan:Connect(function(input, gpe)
-	if gpe then return end
-	if input.KeyCode == Enum.KeyCode.F then
-		toggleFly()
-	end
-end))
-
--- Tombol X: matikan fly, hapus GUI dan semua koneksi
-CloseBtn.MouseButton1Click:Connect(function()
-	stopFly()
-	for _, c in ipairs(Connections) do
-		c:Disconnect()
-	end
-	ScreenGui:Destroy()
-end)
-
--- Respawn: fly OFF, jump power dipasang ulang
+-- ==================== RESPAWN ====================
 table.insert(Connections, Player.CharacterAdded:Connect(function(char)
 	stopFly()
-	char:WaitForChild("Humanoid")
-	applyJump()
+	local hum = char:WaitForChild("Humanoid")
+	DefaultWalk = hum.WalkSpeed
+	DefaultJump = hum.JumpPower
 end))
 
-print("Fly Menu v2 Loaded | Minimize + Speed + Jump")
+notify("Fly Hub PRO loaded")
+print("Fly Hub PRO Loaded | F = Fly, N = Noclip, J = Inf Jump, RightShift = Hide")
