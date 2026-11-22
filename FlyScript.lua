@@ -5,6 +5,8 @@
 	  F          = Fly ON/OFF
 	  N          = Noclip ON/OFF
 	  J          = Infinite Jump ON/OFF
+	  K          = Anti Fling ON/OFF
+	  L          = Walk Fling ON/OFF
 	  RightShift = Tampilkan / sembunyikan menu
 
 	Fly: WASD = gerak | Space = naik | Ctrl = turun
@@ -24,6 +26,8 @@ local State = {
 	Noclip = false,
 	InfJump = false,
 	AntiAFK = false,
+	AntiFling = false,
+	Fling = false,
 	FlySpeed = 60,
 	WalkSpeed = 16,
 	JumpPower = 50,
@@ -514,6 +518,18 @@ local function startFly()
 	return true
 end
 
+-- ==================== ANTI FLING ====================
+local FlingModified = setmetatable({}, {__mode = "k"})
+
+local function restoreFling()
+	for part in pairs(FlingModified) do
+		if part and part.Parent then
+			part.CanCollide = true
+		end
+	end
+	table.clear(FlingModified)
+end
+
 -- ==================== PAGES ====================
 local MainPage = createTab("Main")
 local PlayerPage = createTab("Player")
@@ -545,6 +561,22 @@ end)
 local InfJumpToggle = createToggle(MainPage, "Infinite Jump  [J]", false, function(v)
 	State.InfJump = v
 	notify("Infinite Jump: " .. (v and "ON" or "OFF"))
+end)
+
+local AntiFlingToggle = createToggle(MainPage, "Anti Fling  [K]", false, function(v)
+	State.AntiFling = v
+	if not v then restoreFling() end
+	notify("Anti Fling: " .. (v and "ON" or "OFF"))
+end)
+
+local FlingToggle = createToggle(MainPage, "Walk Fling  [L]", false, function(v)
+	State.Fling = v
+	if v then
+		-- fling butuh tabrakan, jadi Noclip & Anti Fling dimatikan dulu
+		if NoclipToggle.Get() then NoclipToggle.Set(false) end
+		if AntiFlingToggle.Get() then AntiFlingToggle.Set(false) end
+	end
+	notify("Walk Fling: " .. (v and "ON (jalan nabrak orang)" or "OFF"))
 end)
 
 -- ---- Player ----
@@ -582,11 +614,12 @@ local AFKToggle = createToggle(MiscPage, "Anti AFK", false, function(v)
 end)
 
 createInfo(MiscPage,
-	"Keybind:\nF = Fly\nN = Noclip\nJ = Infinite Jump\nRightShift = Tampil/sembunyi menu\n\nFly: WASD + Space (naik) + Ctrl (turun)",
-	118)
+	"Keybind:\nF = Fly\nN = Noclip\nJ = Infinite Jump\nK = Anti Fling\nL = Walk Fling\nRightShift = Tampil/sembunyi menu\n\nFly: WASD + Space (naik) + Ctrl (turun)",
+	146)
 
 local function unload()
 	stopFly()
+	restoreFling()
 	for _, c in ipairs(Connections) do
 		c:Disconnect()
 	end
@@ -655,6 +688,60 @@ table.insert(Connections, RunService.Stepped:Connect(function()
 	end
 end))
 
+-- Anti Fling
+-- 1) Karakter pemain lain tidak bisa nabrak kamu (CanCollide dimatikan di sisi kamu)
+table.insert(Connections, RunService.Stepped:Connect(function()
+	if not State.AntiFling then return end
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= Player and plr.Character then
+			for _, part in ipairs(plr.Character:GetDescendants()) do
+				if part:IsA("BasePart") and part.CanCollide then
+					part.CanCollide = false
+					FlingModified[part] = true
+				end
+			end
+		end
+	end
+end))
+
+-- 2) Kalau tetap terdorong terlalu kencang atau berputar liar, langsung ditahan
+table.insert(Connections, RunService.Heartbeat:Connect(function()
+	if not State.AntiFling then return end
+	local root = getRoot()
+	if not root then return end
+
+	if root.AssemblyAngularVelocity.Magnitude > 30 then
+		root.AssemblyAngularVelocity = Vector3.zero
+	end
+
+	if not State.Flying then
+		local v = root.AssemblyLinearVelocity
+		local horizontal = Vector3.new(v.X, 0, v.Z)
+		local limit = math.max(120, State.WalkSpeed * 4)
+		if horizontal.Magnitude > limit then
+			root.AssemblyLinearVelocity = Vector3.new(0, v.Y, 0)
+		end
+	end
+end))
+
+-- Walk Fling (loop sendiri, berhenti otomatis kalau GUI di-unload)
+task.spawn(function()
+	while ScreenGui.Parent do
+		RunService.Heartbeat:Wait()
+		if State.Fling then
+			local root = getRoot()
+			if root then
+				local vel = root.AssemblyLinearVelocity
+				root.AssemblyLinearVelocity = vel * 10000 + Vector3.new(0, 10000, 0)
+				RunService.RenderStepped:Wait()
+				if root.Parent then root.AssemblyLinearVelocity = vel end
+				RunService.Stepped:Wait()
+				if root.Parent then root.AssemblyLinearVelocity = vel + Vector3.new(0, 0.1, 0) end
+			end
+		end
+	end
+end)
+
 -- Infinite Jump
 table.insert(Connections, UIS.JumpRequest:Connect(function()
 	if not State.InfJump then return end
@@ -683,6 +770,10 @@ table.insert(Connections, UIS.InputBegan:Connect(function(input, gpe)
 		NoclipToggle.Set(not NoclipToggle.Get())
 	elseif k == Enum.KeyCode.J then
 		InfJumpToggle.Set(not InfJumpToggle.Get())
+	elseif k == Enum.KeyCode.K then
+		AntiFlingToggle.Set(not AntiFlingToggle.Get())
+	elseif k == Enum.KeyCode.L then
+		FlingToggle.Set(not FlingToggle.Get())
 	elseif k == Enum.KeyCode.RightShift then
 		ScreenGui.Enabled = not ScreenGui.Enabled
 	end
@@ -751,4 +842,4 @@ table.insert(Connections, Player.CharacterAdded:Connect(function(char)
 end))
 
 notify("Fly Hub PRO loaded")
-print("Fly Hub PRO Loaded | F = Fly, N = Noclip, J = Inf Jump, RightShift = Hide")
+print("Fly Hub PRO Loaded | F = Fly, N = Noclip, J = Inf Jump, K = Anti Fling, L = Walk Fling, RightShift = Hide")
