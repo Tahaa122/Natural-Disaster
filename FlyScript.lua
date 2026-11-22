@@ -1,6 +1,4 @@
--- Fly Script + Black & White Glossy GUI
--- Tombol di GUI buat ON/OFF Fly
--- Bisa juga tekan F di keyboard
+-- Fly Script + Black & White Glossy GUI (Clean Version)
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -90,7 +88,6 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = PlayerGui
 
--- Main Frame (hitam glossy)
 local Main = Instance.new("Frame")
 Main.Name = "Main"
 Main.Size = UDim2.new(0, 230, 0, 150)
@@ -111,7 +108,6 @@ Stroke.Thickness = 1.4
 Stroke.Transparency = 0.25
 Stroke.Parent = Main
 
--- Gradient biar keliatan glossy
 local Gradient = Instance.new("UIGradient")
 Gradient.Color = ColorSequence.new({
 	ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 30, 30)),
@@ -121,7 +117,6 @@ Gradient.Color = ColorSequence.new({
 Gradient.Rotation = 90
 Gradient.Parent = Main
 
--- Title
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 38)
 Title.BackgroundTransparency = 1
@@ -131,7 +126,6 @@ Title.Font = Enum.Font.GothamBold
 Title.TextSize = 18
 Title.Parent = Main
 
--- Garis pemisah
 local Line = Instance.new("Frame")
 Line.Size = UDim2.new(0.85, 0, 0, 1)
 Line.Position = UDim2.new(0.075, 0, 0, 38)
@@ -140,7 +134,6 @@ Line.BackgroundTransparency = 0.7
 Line.BorderSizePixel = 0
 Line.Parent = Main
 
--- Tombol Toggle
 local ToggleBtn = Instance.new("TextButton")
 ToggleBtn.Name = "Toggle"
 ToggleBtn.Size = UDim2.new(0.8, 0, 0, 42)
@@ -163,7 +156,6 @@ BtnStroke.Thickness = 1.2
 BtnStroke.Transparency = 0.4
 BtnStroke.Parent = ToggleBtn
 
--- Hover effect
 ToggleBtn.MouseEnter:Connect(function()
 	TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {
 		BackgroundColor3 = Color3.fromRGB(40, 40, 40)
@@ -176,7 +168,6 @@ ToggleBtn.MouseLeave:Connect(function()
 	}):Play()
 end)
 
--- Close Button
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size = UDim2.new(0, 28, 0, 28)
 CloseBtn.Position = UDim2.new(1, -32, 0, 6)
@@ -196,7 +187,7 @@ CloseBtn.MouseButton1Click:Connect(function()
 	Main.Visible = false
 end)
 
--- ==================== TOGGLE FUNCTION ====================
+-- ==================== TOGGLE ====================
 local function updateButton()
 	if Flying then
 		ToggleBtn.Text = "FLY : ON"
@@ -214,7 +205,6 @@ ToggleBtn.MouseButton1Click:Connect(function()
 	updateButton()
 end)
 
--- Keybind F juga masih bisa
 UIS.InputBegan:Connect(function(input, gpe)
 	if gpe then return end
 	if input.KeyCode == Enum.KeyCode.F then
@@ -223,7 +213,6 @@ UIS.InputBegan:Connect(function(input, gpe)
 	end
 end)
 
--- Info kecil di bawah
 local Info = Instance.new("TextLabel")
 Info.Size = UDim2.new(1, 0, 0, 20)
 Info.Position = UDim2.new(0, 0, 1, -24)
@@ -234,4 +223,4 @@ Info.Font = Enum.Font.Gotham
 Info.TextSize = 12
 Info.Parent = Main
 
-print("Fly Menu Loaded | GUI Hitam Putih Glossy")
+print("Fly Menu Loaded | Clean Version")
