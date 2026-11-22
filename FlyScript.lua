@@ -1,5 +1,5 @@
 --[[
-	NATURAL DISASTER  by jeysar  (Black & White GUI)
+	NATURAL DISASTER  v1.2  |  by jeysar  (Black & White GUI)
 
 	Keybind:
 	  F          = Fly ON/OFF
@@ -149,17 +149,70 @@ TitleBar.BackgroundTransparency = 1
 TitleBar.Active = true
 TitleBar.Parent = Main
 
+local VERSION = "v1.2"
+
+local TitleBox = Instance.new("Frame")
+TitleBox.Size = UDim2.new(1, -90, 1, 0)
+TitleBox.Position = UDim2.new(0, 14, 0, 0)
+TitleBox.BackgroundTransparency = 1
+TitleBox.Parent = TitleBar
+
+local TitleLayout = Instance.new("UIListLayout")
+TitleLayout.FillDirection = Enum.FillDirection.Horizontal
+TitleLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+TitleLayout.SortOrder = Enum.SortOrder.LayoutOrder
+TitleLayout.Padding = UDim.new(0, 7)
+TitleLayout.Parent = TitleBox
+
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -90, 1, 0)
-Title.Position = UDim2.new(0, 14, 0, 0)
+Title.LayoutOrder = 1
+Title.AutomaticSize = Enum.AutomaticSize.X
+Title.Size = UDim2.new(0, 0, 1, 0)
 Title.BackgroundTransparency = 1
-Title.RichText = true
-Title.Text = 'NATURAL DISASTER  <font size="11" color="rgb(150,150,150)"><i>by jeysar</i></font>'
+Title.Text = "NATURAL DISASTER"
 Title.TextColor3 = C.White
 Title.Font = Enum.Font.GothamBold
-Title.TextSize = 16
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = TitleBar
+Title.TextSize = 15
+Title.Parent = TitleBox
+
+-- Credit kecil: "by jeysar"
+local Credit = Instance.new("TextLabel")
+Credit.LayoutOrder = 2
+Credit.AutomaticSize = Enum.AutomaticSize.X
+Credit.Size = UDim2.new(0, 0, 1, 0)
+Credit.BackgroundTransparency = 1
+Credit.Text = "by jeysar"
+Credit.TextColor3 = C.Dim
+Credit.Font = Enum.Font.GothamMedium
+Credit.TextSize = 10
+Credit.Parent = TitleBox
+
+-- Badge versi
+local VerBadge = Instance.new("Frame")
+VerBadge.LayoutOrder = 3
+VerBadge.AutomaticSize = Enum.AutomaticSize.X
+VerBadge.Size = UDim2.new(0, 0, 0, 16)
+VerBadge.BackgroundColor3 = C.White
+VerBadge.BackgroundTransparency = 0.88
+VerBadge.BorderSizePixel = 0
+VerBadge.Parent = TitleBox
+addCorner(VerBadge, 8)
+addStroke(VerBadge, 0.6, 1)
+
+local VerPad = Instance.new("UIPadding")
+VerPad.PaddingLeft = UDim.new(0, 7)
+VerPad.PaddingRight = UDim.new(0, 7)
+VerPad.Parent = VerBadge
+
+local VerText = Instance.new("TextLabel")
+VerText.AutomaticSize = Enum.AutomaticSize.X
+VerText.Size = UDim2.new(0, 0, 1, 0)
+VerText.BackgroundTransparency = 1
+VerText.Text = VERSION
+VerText.TextColor3 = C.White
+VerText.Font = Enum.Font.GothamBold
+VerText.TextSize = 10
+VerText.Parent = VerBadge
 
 local MinBtn = Instance.new("TextButton")
 MinBtn.Size = UDim2.new(0, 28, 0, 28)
@@ -932,5 +985,5 @@ table.insert(Connections, Player.CharacterAdded:Connect(function(char)
 	DefaultJump = hum.JumpPower
 end))
 
-notify("Natural Disaster by jeysar loaded")
-print("Natural Disaster by jeysar Loaded | F = Fly, N = Noclip, J = Inf Jump, K = Anti Fling, L = Walk Fling, M = ESP, RightShift = Hide")
+notify("Natural Disaster " .. VERSION .. " by jeysar loaded")
+print("Natural Disaster " .. VERSION .. " by jeysar Loaded | F = Fly, N = Noclip, J = Inf Jump, K = Anti Fling, L = Walk Fling, M = ESP, RightShift = Hide")
