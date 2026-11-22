@@ -7,7 +7,7 @@
 	  J          = Infinite Jump ON/OFF
 	  K          = Anti Fling ON/OFF
 	  L          = Walk Fling ON/OFF
-	  G          = God Mode ON/OFF
+	  M          = ESP Aura ON/OFF
 	  RightShift = Tampilkan / sembunyikan menu
 
 	Fly: WASD = gerak | Space = naik | Ctrl = turun
@@ -29,7 +29,8 @@ local State = {
 	AntiAFK = false,
 	AntiFling = false,
 	Fling = false,
-	God = false,
+	ESP = false,
+	ESPIntensity = 70,
 	FlySpeed = 60,
 	WalkSpeed = 16,
 	JumpPower = 50,
@@ -77,6 +78,8 @@ end
 
 local old = guiParent:FindFirstChild("FlyHubPro")
 if old then old:Destroy() end
+local oldEsp = guiParent:FindFirstChild("FlyHubESP")
+if oldEsp then oldEsp:Destroy() end
 
 -- ==================== TEMA & UTILITAS UI ====================
 local C = {
@@ -532,38 +535,76 @@ local function restoreFling()
 	table.clear(FlingModified)
 end
 
--- ==================== GOD MODE ====================
-local GodConn
+-- ==================== ESP AURA ====================
+local ESP_COLOR = Color3.fromRGB(255, 0, 0)
+local ESPFolder = Instance.new("Folder")
+ESPFolder.Name = "FlyHubESP"
+ESPFolder.Parent = guiParent
 
-local function setDeadState(hum, blocked)
-	pcall(function()
-		hum:SetStateEnabled(Enum.HumanoidStateType.Dead, not blocked)
-	end)
+local ESPObjects = {}
+
+-- Intensitas 5-100: makin tinggi makin pekat (fill) & outline makin jelas
+local function styleESP(h)
+	local i = State.ESPIntensity / 100
+	h.FillColor = ESP_COLOR
+	h.OutlineColor = ESP_COLOR
+	h.FillTransparency = 1 - i
+	h.OutlineTransparency = (1 - i) * 0.5
 end
 
-local function stopGod()
-	if GodConn then GodConn:Disconnect() GodConn = nil end
-	local hum = getHumanoid()
-	if hum then setDeadState(hum, false) end
+local function removeESP(plr)
+	local h = ESPObjects[plr]
+	if h then
+		h:Destroy()
+		ESPObjects[plr] = nil
+	end
 end
 
-local function startGod()
-	stopGod()
-	local hum = getHumanoid()
-	if not hum then return false end
-	setDeadState(hum, true)
-	if hum.Health > 0 then hum.Health = hum.MaxHealth end
-	GodConn = hum.HealthChanged:Connect(function()
-		if State.God and hum.Health > 0 and hum.Health < hum.MaxHealth then
-			hum.Health = hum.MaxHealth
-		end
-	end)
-	return true
+local function addESP(plr)
+	if plr == Player then return end
+	removeESP(plr)
+	local char = plr.Character
+	if not char then return end
+	local h = Instance.new("Highlight")
+	h.Name = "ESP_" .. plr.Name
+	h.Adornee = char
+	h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- tembus tembok
+	styleESP(h)
+	h.Parent = ESPFolder
+	ESPObjects[plr] = h
 end
+
+local function refreshAllESP()
+	for _, plr in ipairs(Players:GetPlayers()) do
+		addESP(plr)
+	end
+end
+
+local function clearESP()
+	for plr in pairs(ESPObjects) do
+		removeESP(plr)
+	end
+end
+
+local function hookESPPlayer(plr)
+	if plr == Player then return end
+	table.insert(Connections, plr.CharacterAdded:Connect(function()
+		if State.ESP then addESP(plr) end
+	end))
+end
+
+for _, plr in ipairs(Players:GetPlayers()) do hookESPPlayer(plr) end
+
+table.insert(Connections, Players.PlayerAdded:Connect(function(plr)
+	hookESPPlayer(plr)
+end))
+
+table.insert(Connections, Players.PlayerRemoving:Connect(removeESP))
 
 -- ==================== PAGES ====================
 local MainPage = createTab("Main")
 local PlayerPage = createTab("Player")
+local ESPPage = createTab("ESP")
 local MiscPage = createTab("Misc")
 
 -- ---- Main ----
@@ -610,20 +651,6 @@ local FlingToggle = createToggle(MainPage, "Walk Fling  [L]", false, function(v)
 	notify("Walk Fling: " .. (v and "ON (jalan nabrak orang)" or "OFF"))
 end)
 
-local GodToggle = createToggle(MainPage, "God Mode  [G]", false, function(v)
-	State.God = v
-	if v then
-		if not startGod() then
-			State.God = false
-			GodToggle.Set(false, true)
-			return
-		end
-	else
-		stopGod()
-	end
-	notify("God Mode: " .. (v and "ON" or "OFF"))
-end)
-
 -- ---- Player ----
 local WalkSlider = createSlider(PlayerPage, "Walk Speed", 8, 200,
 	math.clamp(DefaultWalk, 8, 200), function(v)
@@ -652,6 +679,20 @@ createButton(PlayerPage, "Reset Walk & Jump", function()
 	notify("Walk & Jump di-reset")
 end)
 
+-- ---- ESP ----
+local ESPToggle = createToggle(ESPPage, "ESP Aura  [M]", false, function(v)
+	State.ESP = v
+	if v then refreshAllESP() else clearESP() end
+	notify("ESP Aura: " .. (v and "ON" or "OFF"))
+end)
+
+createSlider(ESPPage, "Intensitas Aura", 5, 100, State.ESPIntensity, function(v)
+	State.ESPIntensity = v
+	for _, h in pairs(ESPObjects) do styleESP(h) end
+end)
+
+createInfo(ESPPage, "Aura merah di semua pemain lain, tembus tembok.\nGeser slider buat atur pekat/tipisnya aura.", 60)
+
 -- ---- Misc ----
 local AFKToggle = createToggle(MiscPage, "Anti AFK", false, function(v)
 	State.AntiAFK = v
@@ -659,13 +700,14 @@ local AFKToggle = createToggle(MiscPage, "Anti AFK", false, function(v)
 end)
 
 createInfo(MiscPage,
-	"Keybind:\nF = Fly\nN = Noclip\nJ = Infinite Jump\nK = Anti Fling\nL = Walk Fling\nG = God Mode\nRightShift = Tampil/sembunyi menu\n\nFly: WASD + Space (naik) + Ctrl (turun)",
+	"Keybind:\nF = Fly\nN = Noclip\nJ = Infinite Jump\nK = Anti Fling\nL = Walk Fling\nM = ESP Aura\nRightShift = Tampil/sembunyi menu\n\nFly: WASD + Space (naik) + Ctrl (turun)",
 	160)
 
 local function unload()
 	stopFly()
-	stopGod()
 	restoreFling()
+	clearESP()
+	ESPFolder:Destroy()
 	for _, c in ipairs(Connections) do
 		c:Disconnect()
 	end
@@ -688,26 +730,6 @@ table.insert(Connections, RunService.Heartbeat:Connect(function()
 			if not hum.UseJumpPower then hum.UseJumpPower = true end
 			if hum.JumpPower ~= State.JumpPower then
 				hum.JumpPower = State.JumpPower
-			end
-		end
-	end
-
-	-- God Mode: HP selalu penuh + peredam fall damage
-	if State.God and hum then
-		if hum.Health > 0 and hum.Health < hum.MaxHealth then
-			hum.Health = hum.MaxHealth
-		end
-		local r = getRoot()
-		if r and not State.Flying then
-			local v = r.AssemblyLinearVelocity
-			if v.Y < -60 then
-				local params = RaycastParams.new()
-				params.FilterType = Enum.RaycastFilterType.Exclude
-				params.FilterDescendantsInstances = {getChar()}
-				local hit = workspace:Raycast(r.Position, Vector3.new(0, -14, 0), params)
-				if hit then
-					r.AssemblyLinearVelocity = Vector3.new(v.X, -15, v.Z)
-				end
 			end
 		end
 	end
@@ -840,8 +862,8 @@ table.insert(Connections, UIS.InputBegan:Connect(function(input, gpe)
 		AntiFlingToggle.Set(not AntiFlingToggle.Get())
 	elseif k == Enum.KeyCode.L then
 		FlingToggle.Set(not FlingToggle.Get())
-	elseif k == Enum.KeyCode.G then
-		GodToggle.Set(not GodToggle.Get())
+	elseif k == Enum.KeyCode.M then
+		ESPToggle.Set(not ESPToggle.Get())
 	elseif k == Enum.KeyCode.RightShift then
 		ScreenGui.Enabled = not ScreenGui.Enabled
 	end
@@ -907,8 +929,7 @@ table.insert(Connections, Player.CharacterAdded:Connect(function(char)
 	local hum = char:WaitForChild("Humanoid")
 	DefaultWalk = hum.WalkSpeed
 	DefaultJump = hum.JumpPower
-	if State.God then startGod() end
 end))
 
 notify("Fly Hub PRO loaded")
-print("Fly Hub PRO Loaded | F = Fly, N = Noclip, J = Inf Jump, K = Anti Fling, L = Walk Fling, G = God Mode, RightShift = Hide")
+print("Fly Hub PRO Loaded | F = Fly, N = Noclip, J = Inf Jump, K = Anti Fling, L = Walk Fling, M = ESP, RightShift = Hide")
