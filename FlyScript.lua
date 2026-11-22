@@ -1,5 +1,5 @@
 --[[
-	FLY HUB | PRO  (Black & White GUI)
+	NATURAL DISASTER  by jeysar  (Black & White GUI)
 
 	Keybind:
 	  F          = Fly ON/OFF
@@ -153,7 +153,8 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -90, 1, 0)
 Title.Position = UDim2.new(0, 14, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "FLY HUB  |  PRO"
+Title.RichText = true
+Title.Text = 'NATURAL DISASTER  <font size="11" color="rgb(150,150,150)"><i>by jeysar</i></font>'
 Title.TextColor3 = C.White
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 16
@@ -931,5 +932,5 @@ table.insert(Connections, Player.CharacterAdded:Connect(function(char)
 	DefaultJump = hum.JumpPower
 end))
 
-notify("Fly Hub PRO loaded")
-print("Fly Hub PRO Loaded | F = Fly, N = Noclip, J = Inf Jump, K = Anti Fling, L = Walk Fling, M = ESP, RightShift = Hide")
+notify("Natural Disaster by jeysar loaded")
+print("Natural Disaster by jeysar Loaded | F = Fly, N = Noclip, J = Inf Jump, K = Anti Fling, L = Walk Fling, M = ESP, RightShift = Hide")
